@@ -152,111 +152,85 @@
         }
     </style>
     <script>
-    async function generateImage() {
-        const prompt = document.getElementById('prompt').value;
-        const size = document.getElementById('size').value;
-        const modelSelection = document.getElementById('model').value;
-        const imageContainer = document.getElementById('image-container');
-        const downloadBtn = document.getElementById('download-btn');
+        async function generateImage() {
+            const prompt = document.getElementById('prompt').value;
+            const size = document.getElementById('size').value;
+            const modelSelection = document.getElementById('model').value;
+            const imageContainer = document.getElementById('image-container');
+            const downloadBtn = document.getElementById('download-btn');
+            
+            const modelMapping = {
+                "Flux 1.1 Ultra": "Provider-3/flux-1.1-ultra",
+                "Flux Schnell": "Provider-5/flux-schnell",
+                "Flux Pro": "Provider-5/flux-pro",
+                "Flux Dev": "Provider-6/flux-dev"
+            };
+            const model = modelMapping[modelSelection] || "Provider-3/flux-1.1-ultra";
 
-        const modelMapping = {
-            "Flux 1.1 Ultra": "Provider-3/flux-1.1-ultra",
-            "Flux Schnell": "Provider-5/flux-schnell",
-            "Flux Pro": "Provider-5/flux-pro",
-            "Flux Dev": "Provider-6/flux-dev"
-        };
-        const model = modelMapping[modelSelection] || "Provider-3/flux-1.1-ultra";
+            const sizeMapping = {
+                "1024x1024": "1024x1024",
+                "512x512": "512x512",
+                "256x256": "256x256"
+            };
+            const mappedSize = sizeMapping[size] || "1024x1024";
 
-        const sizeMapping = {
-            "1024x1024": "1024x1024",
-            "512x512": "512x512",
-            "256x256": "256x256"
-        };
-        const mappedSize = sizeMapping[size] || "1024x1024";
+            imageContainer.innerHTML = '<p class="loading">Generating image...</p>';
+            imageContainer.scrollIntoView({ behavior: 'smooth' });
+            imageContainer.style.border = "none";
+            downloadBtn.style.display = 'none';
 
-        imageContainer.innerHTML = '<p class="loading">Starting image generation...</p>';
-        imageContainer.scrollIntoView({ behavior: 'smooth' });
-        downloadBtn.style.display = 'none';
+            try {
+                const response = await fetch('https://beta.sree.shop/v1/images/generations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ddc-Y49lO3FB63zwnmkLA9Nh5CjED7b7xHg2X9Ne1rxU2UQtVJUGPP0ZvD'
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        prompt: prompt,
+                        n: 1,
+                        size: mappedSize
+                    })
+                });
 
-        try {
-            const response = await fetch('https://beta.sree.shop/v1/images/generations', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ddc-Y49lO3FB63zwnmkLA9Nh5CjED7b7xHg2X9Ne1rxU2UQtVJUGPP0ZvD'
-                },
-                body: JSON.stringify({
-                    model: model,
-                    prompt: prompt,
-                    n: 1,
-                    size: mappedSize,
-                    stream: true
-                })
-            });
+                const data = await response.json();
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
+                if (data && data.data && data.data.length > 0) {
+                    const imageUrl = data.data[0].url;
+                    const img = new Image();
+                    img.onload = () => {
+                        imageContainer.innerHTML = '';
+                        imageContainer.appendChild(img);
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+                        // Add click handler for the generated image
+                        img.addEventListener('click', () => {
+                            const modal = document.getElementById('modal-overlay');
+                            const modalImg = document.getElementById('modal-image');
+                            modal.style.display = 'flex';
+                            modalImg.src = imageUrl;
+                        });
 
-                buffer += decoder.decode(value, { stream: true });
-                
-                // Process complete JSON chunks
-                let boundary;
-                while ((boundary = buffer.indexOf('\n')) !== -1) {
-                    const chunk = buffer.slice(0, boundary);
-                    buffer = buffer.slice(boundary + 1);
-
-                    if (chunk.startsWith('data: ')) {
-                        try {
-                            const jsonData = JSON.parse(chunk.slice(6)); // Remove 'data: ' prefix
-                            
-                            if (jsonData.progress) {
-                                imageContainer.innerHTML = `<p class="loading">Processing: ${jsonData.progress}%</p>`;
-                            }
-                            else if (jsonData.url) {
-                                const img = new Image();
-                                img.onload = () => {
-                                    imageContainer.innerHTML = '';
-                                    imageContainer.appendChild(img);
-                                    img.addEventListener('click', () => {
-                                        const modal = document.getElementById('modal-overlay');
-                                        const modalImg = document.getElementById('modal-image');
-                                        modal.style.display = 'flex';
-                                        modalImg.src = jsonData.url;
-                                    });
-                                };
-                                img.src = jsonData.url;
-                                img.style.maxWidth = '100%';
-                                img.style.borderRadius = '10px';
-                                img.style.cursor = 'pointer';
-                                downloadBtn.style.display = 'block';
-                                downloadBtn.onclick = () => downloadImage(jsonData.url);
-                            }
-                        } catch (e) {
-                            console.error('Error parsing JSON chunk:', e);
-                        }
-                    }
+                        // New scroll after image loads
+                        window.scrollTo({
+                            top: document.body.scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    };
+                    img.src = imageUrl;
+                    img.style.maxWidth = '100%';
+                    img.style.borderRadius = '10px';
+                    img.style.cursor = 'pointer';
+                    downloadBtn.style.display = 'block';
+                    downloadBtn.onclick = function() { downloadImage(imageUrl); };
+                } else {
+                    imageContainer.innerHTML = '<p style="color: red;">Failed to generate image. Try again with another model.</p>';
                 }
+            } catch (error) {
+                imageContainer.innerHTML = '<p style="color: red;">Error generating image. Check console for details.</p>';
             }
-        } catch (error) {
-            console.error('Fetch error:', error);
-            imageContainer.innerHTML = '<p style="color: red;">Error generating image. Check console for details.</p>';
         }
-    }
-
-    function downloadImage(url) {
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'generated-image.png';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-</script>
+    </script>
 </head>
 <body>
     <div class="header">Free⚡FluxHQ</div>
