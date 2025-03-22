@@ -156,6 +156,7 @@
             const mappedSize = sizeMapping[size] || "1024x1024";
 
             imageContainer.innerHTML = '<p class="loading">Generating image...</p>';
+            imageContainer.scrollIntoView({ behavior: 'smooth' });
             imageContainer.style.border = "none";
             downloadBtn.style.display = 'none';
 
@@ -178,8 +179,19 @@
 
                 if (data && data.data && data.data.length > 0) {
                     const imageUrl = data.data[0].url;
-                    imageContainer.innerHTML = `<img src="${data.data[0].url}" alt="Generated Image" style="max-width: 100%; border-radius: 10px;">`;
-                    imageContainer.style.border = "none";
+                    const img = new Image();
+                    img.onload = () => {
+                        imageContainer.innerHTML = '';
+                        imageContainer.appendChild(img);
+                        // New scroll after image loads
+                        window.scrollTo({
+                            top: document.body.scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    };
+                    img.src = imageUrl;
+                    img.style.maxWidth = '100%';
+                    img.style.borderRadius = '10px';
                     downloadBtn.style.display = 'block';
                     downloadBtn.onclick = function() { downloadImage(imageUrl); };
                 } else {
@@ -188,15 +200,6 @@
             } catch (error) {
                 imageContainer.innerHTML = '<p style="color: red;">Error generating image. Check console for details.</p>';
             }
-        }
-
-        function downloadImage(url) {
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'LaRa_FreeFluxHQ.png';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
         }
     </script>
 </head>
