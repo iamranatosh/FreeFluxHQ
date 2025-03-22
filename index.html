@@ -152,86 +152,104 @@
         }
     </style>
     <script>
-        async function generateImage() {
-            const prompt = document.getElementById('prompt').value;
-            const size = document.getElementById('size').value;
-            const modelSelection = document.getElementById('model').value;
-            const imageContainer = document.getElementById('image-container');
-            const downloadBtn = document.getElementById('download-btn');
+    async function generateImage() {
+        const prompt = document.getElementById('prompt').value;
+        const size = document.getElementById('size').value;
+        const modelSelection = document.getElementById('model').value;
+        const imageContainer = document.getElementById('image-container');
+        const downloadBtn = document.getElementById('download-btn');
+        
+        const modelMapping = {
+            "Flux 1.1 Ultra": "Provider-3/flux-1.1-ultra",
+            "Flux Schnell": "Provider-5/flux-schnell",
+            "Flux Pro": "Provider-5/flux-pro",
+            "Flux Dev": "Provider-6/flux-dev"
+        };
+        const model = modelMapping[modelSelection] || "Provider-3/flux-1.1-ultra";
+
+        const sizeMapping = {
+            "1024x1024": "1024x1024",
+            "512x512": "512x512",
+            "256x256": "256x256"
+        };
+        const mappedSize = sizeMapping[size] || "1024x1024";
+
+        imageContainer.innerHTML = '<p class="loading">Starting image generation...</p>';
+        imageContainer.scrollIntoView({ behavior: 'smooth' });
+        imageContainer.style.border = "none";
+        downloadBtn.style.display = 'none';
+
+        try {
+            const response = await fetch('https://beta.sree.shop/v1/images/generations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ddc-Y49lO3FB63zwnmkLA9Nh5CjED7b7xHg2X9Ne1rxU2UQtVJUGPP0ZvD'
+                },
+                body: JSON.stringify({
+                    model: model,
+                    prompt: prompt,
+                    n: 1,
+                    size: mappedSize,
+                    stream: true // Ensure the API supports streaming
+                })
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let imageUrl = '';
             
-            const modelMapping = {
-                "Flux 1.1 Ultra": "Provider-3/flux-1.1-ultra",
-                "Flux Schnell": "Provider-5/flux-schnell",
-                "Flux Pro": "Provider-5/flux-pro",
-                "Flux Dev": "Provider-6/flux-dev"
-            };
-            const model = modelMapping[modelSelection] || "Provider-3/flux-1.1-ultra";
-
-            const sizeMapping = {
-                "1024x1024": "1024x1024",
-                "512x512": "512x512",
-                "256x256": "256x256",
-                "1920x1080": "1920x1080"
-            };
-            const mappedSize = sizeMapping[size] || "1024x1024";
-
-            imageContainer.innerHTML = '<p class="loading">Generating image...</p>';
-            imageContainer.scrollIntoView({ behavior: 'smooth' });
-            imageContainer.style.border = "none";
-            downloadBtn.style.display = 'none';
-
-            try {
-                const response = await fetch('https://beta.sree.shop/v1/images/generations', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ddc-Y49lO3FB63zwnmkLA9Nh5CjED7b7xHg2X9Ne1rxU2UQtVJUGPP0ZvD'
-                    },
-                    body: JSON.stringify({
-                        model: model,
-                        prompt: prompt,
-                        n: 1,
-                        size: mappedSize
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data && data.data && data.data.length > 0) {
-                    const imageUrl = data.data[0].url;
-                    const img = new Image();
-                    img.onload = () => {
-                        imageContainer.innerHTML = '';
-                        imageContainer.appendChild(img);
-
-                        // Add click handler for the generated image
-                        img.addEventListener('click', () => {
-                            const modal = document.getElementById('modal-overlay');
-                            const modalImg = document.getElementById('modal-image');
-                            modal.style.display = 'flex';
-                            modalImg.src = imageUrl;
-                        });
-
-                        // New scroll after image loads
-                        window.scrollTo({
-                            top: document.body.scrollHeight,
-                            behavior: 'smooth'
-                        });
-                    };
-                    img.src = imageUrl;
-                    img.style.maxWidth = '100%';
-                    img.style.borderRadius = '10px';
-                    img.style.cursor = 'pointer';
-                    downloadBtn.style.display = 'block';
-                    downloadBtn.onclick = function() { downloadImage(imageUrl); };
-                } else {
-                    imageContainer.innerHTML = '<p style="color: red;">Failed to generate image. Try again with another model.</p>';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value);
+                try {
+                    const data = JSON.parse(chunk);
+                    
+                    // Handle progress updates
+                    if (data.progress) {
+                        imageContainer.innerHTML = `<p class="loading">Processing: ${data.progress}%</p>`;
+                    }
+                    // Handle final image URL
+                    else if (data.url) {
+                        imageUrl = data.url;
+                        const img = new Image();
+                        img.onload = () => {
+                            imageContainer.innerHTML = '';
+                            imageContainer.appendChild(img);
+                            img.addEventListener('click', () => {
+                                const modal = document.getElementById('modal-overlay');
+                                const modalImg = document.getElementById('modal-image');
+                                modal.style.display = 'flex';
+                                modalImg.src = imageUrl;
+                            });
+                        };
+                        img.src = imageUrl;
+                        img.style.maxWidth = '100%';
+                        img.style.borderRadius = '10px';
+                        img.style.cursor = 'pointer';
+                        downloadBtn.style.display = 'block';
+                        downloadBtn.onclick = () => downloadImage(imageUrl);
+                    }
+                } catch (e) {
+                    console.error('Error parsing chunk:', e);
                 }
-            } catch (error) {
-                imageContainer.innerHTML = '<p style="color: red;">Error generating image. Check console for details.</p>';
             }
+        } catch (error) {
+            imageContainer.innerHTML = '<p style="color: red;">Error generating image. Check console for details.</p>';
         }
-    </script>
+    }
+
+    function downloadImage(url) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'generated-image.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
 </head>
 <body>
     <div class="header">Free⚡FluxHQ</div>
@@ -257,7 +275,6 @@
                 <option>1024x1024</option>
                 <option>512x512</option>
                 <option>256x256</option>
-                <option>1920x1080</option>
             </select>
             <button onclick="generateImage()">Generate Image</button>
         </div>
