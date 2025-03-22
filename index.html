@@ -158,7 +158,7 @@
         const modelSelection = document.getElementById('model').value;
         const imageContainer = document.getElementById('image-container');
         const downloadBtn = document.getElementById('download-btn');
-        
+
         const modelMapping = {
             "Flux 1.1 Ultra": "Provider-3/flux-1.1-ultra",
             "Flux Schnell": "Provider-5/flux-schnell",
@@ -176,7 +176,6 @@
 
         imageContainer.innerHTML = '<p class="loading">Starting image generation...</p>';
         imageContainer.scrollIntoView({ behavior: 'smooth' });
-        imageContainer.style.border = "none";
         downloadBtn.style.display = 'none';
 
         try {
@@ -191,52 +190,60 @@
                     prompt: prompt,
                     n: 1,
                     size: mappedSize,
-                    stream: true // Ensure the API supports streaming
+                    stream: true
                 })
             });
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-            let imageUrl = '';
-            
+            let buffer = '';
+
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
                 
-                const chunk = decoder.decode(value);
-                try {
-                    const data = JSON.parse(chunk);
-                    
-                    // Handle progress updates
-                    if (data.progress) {
-                        imageContainer.innerHTML = `<p class="loading">Processing: ${data.progress}%</p>`;
+                // Process complete JSON chunks
+                let boundary;
+                while ((boundary = buffer.indexOf('\n')) !== -1) {
+                    const chunk = buffer.slice(0, boundary);
+                    buffer = buffer.slice(boundary + 1);
+
+                    if (chunk.startsWith('data: ')) {
+                        try {
+                            const jsonData = JSON.parse(chunk.slice(6)); // Remove 'data: ' prefix
+                            
+                            if (jsonData.progress) {
+                                imageContainer.innerHTML = `<p class="loading">Processing: ${jsonData.progress}%</p>`;
+                            }
+                            else if (jsonData.url) {
+                                const img = new Image();
+                                img.onload = () => {
+                                    imageContainer.innerHTML = '';
+                                    imageContainer.appendChild(img);
+                                    img.addEventListener('click', () => {
+                                        const modal = document.getElementById('modal-overlay');
+                                        const modalImg = document.getElementById('modal-image');
+                                        modal.style.display = 'flex';
+                                        modalImg.src = jsonData.url;
+                                    });
+                                };
+                                img.src = jsonData.url;
+                                img.style.maxWidth = '100%';
+                                img.style.borderRadius = '10px';
+                                img.style.cursor = 'pointer';
+                                downloadBtn.style.display = 'block';
+                                downloadBtn.onclick = () => downloadImage(jsonData.url);
+                            }
+                        } catch (e) {
+                            console.error('Error parsing JSON chunk:', e);
+                        }
                     }
-                    // Handle final image URL
-                    else if (data.url) {
-                        imageUrl = data.url;
-                        const img = new Image();
-                        img.onload = () => {
-                            imageContainer.innerHTML = '';
-                            imageContainer.appendChild(img);
-                            img.addEventListener('click', () => {
-                                const modal = document.getElementById('modal-overlay');
-                                const modalImg = document.getElementById('modal-image');
-                                modal.style.display = 'flex';
-                                modalImg.src = imageUrl;
-                            });
-                        };
-                        img.src = imageUrl;
-                        img.style.maxWidth = '100%';
-                        img.style.borderRadius = '10px';
-                        img.style.cursor = 'pointer';
-                        downloadBtn.style.display = 'block';
-                        downloadBtn.onclick = () => downloadImage(imageUrl);
-                    }
-                } catch (e) {
-                    console.error('Error parsing chunk:', e);
                 }
             }
         } catch (error) {
+            console.error('Fetch error:', error);
             imageContainer.innerHTML = '<p style="color: red;">Error generating image. Check console for details.</p>';
         }
     }
