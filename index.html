@@ -168,12 +168,11 @@
             const model = modelMapping[modelSelection] || "Provider-3/flux-1.1-ultra";
 
             const sizeMapping = {
-                "1920x1080": "1920x1080"
                 "1024x1024": "1024x1024",
                 "512x512": "512x512",
                 "256x256": "256x256"
             };
-            const mappedSize = sizeMapping[size] || "1920x1080";
+            const mappedSize = sizeMapping[size] || "1024x1024";
 
             imageContainer.innerHTML = '<p class="loading">Generating image...</p>';
             imageContainer.scrollIntoView({ behavior: 'smooth' });
@@ -254,7 +253,6 @@
             </select>
             <label>Size</label>
             <select id="size">
-                <option>1920x1080</option>
                 <option>1024x1024</option>
                 <option>512x512</option>
                 <option>256x256</option>
